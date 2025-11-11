@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import PlayerTable from "../../components/PlayerTable/PlayerTable";
-import styles from "./CreateTournament.module.scss";
 import { useTournamentStore } from "../../store/tournamentStore";
 import { useNavigate } from "react-router-dom";
+import { Button, Modal, Select, Group, Title, Center } from "@mantine/core";
 
 const CreateTournament: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -16,20 +16,18 @@ const CreateTournament: React.FC = () => {
   const closeModal = () => setIsModalOpen(false);
 
   const handleStart = () => {
-    // Фильтруем пустые строки и обнуляем chillZone
     const filteredPlayers = players
       .filter((p) => p.nickname || p.mmr || p.role)
       .map((p) => ({
         ...p,
-        chillZone: 0, // обнуляем перед турниром
+        chillZone: 0,
       }));
 
-    setPlayers(filteredPlayers); // ✅ теперь тип соответствует Player[]
+    setPlayers(filteredPlayers);
     closeModal();
     navigate("/tournament");
   };
 
-  // Кнопка очистки списка игроков
   const handleClear = () => {
     if (window.confirm("Вы уверены, что хотите очистить всех участников?")) {
       setPlayers([
@@ -46,46 +44,47 @@ const CreateTournament: React.FC = () => {
   };
 
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <h1 className={styles.title}>Создать турнир</h1>
-        <button className={styles.clearBtn} onClick={handleClear}>
+    <div className="p-6 max-w-5xl mx-auto">
+      {/* Header */}
+      <div className="flex justify-between items-center mb-6">
+        <Title order={2}>Создать турнир</Title>
+        <Button color="red" variant="outline" onClick={handleClear}>
           Очистить
-        </button>
+        </Button>
       </div>
 
-      <div className={styles.tableWrapper}>
+      {/* Player Table */}
+      <div className="mb-6">
         <PlayerTable />
-        <div className={styles.buttonWrapper}>
-          <button onClick={openModal}>Создать</button>
-        </div>
       </div>
 
-      {isModalOpen && (
-        <div className={styles.modalOverlay}>
-          <div className={styles.modal}>
-            <h2>Выберите количество жизней</h2>
-            <select
-              value={lives}
-              onChange={(e) => setLives(Number(e.target.value))}
-            >
-              {[1, 2, 3, 4, 5].map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
-            <div className={styles.modalButtons}>
-              <button className={styles.startBtn} onClick={handleStart}>
-                Начать турнир
-              </button>
-              <button className={styles.closeBtn} onClick={closeModal}>
-                Закрыть
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Create Button */}
+      <Center className="mb-6">
+        <Button onClick={openModal}>Создать</Button>
+      </Center>
+
+      {/* Modal */}
+      <Modal
+        opened={isModalOpen}
+        onClose={closeModal}
+        title="Выберите количество жизней"
+        centered
+      >
+        <Select
+          value={lives.toString()}
+          onChange={(value) => setLives(Number(value))}
+          data={["1", "2", "3", "4", "5"]}
+          label="Жизни"
+        />
+        <Group position="apart" mt="xl">
+          <Button color="green" onClick={handleStart}>
+            Начать турнир
+          </Button>
+          <Button variant="outline" color="gray" onClick={closeModal}>
+            Закрыть
+          </Button>
+        </Group>
+      </Modal>
     </div>
   );
 };

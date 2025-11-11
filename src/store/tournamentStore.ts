@@ -15,13 +15,13 @@ export interface PlayerWithLives extends Player {
 }
 
 interface TournamentState {
-  players: PlayerWithLives[]; // теперь с currentLives
+  players: PlayerWithLives[];
   lives: number;
   chillZoneTemp: PlayerWithLives[];
   setPlayers: (players: PlayerWithLives[]) => void;
   setLives: (lives: number) => void;
   setChillZoneTemp: (players: PlayerWithLives[]) => void;
-  generateLobbies: () => {
+  generateLobbies: (playersList?: PlayerWithLives[]) => {
     lobbies: PlayerWithLives[][];
     remaining: PlayerWithLives[];
   };
@@ -34,16 +34,22 @@ export const useTournamentStore = create<TournamentState>()(
       lives: 2,
       chillZoneTemp: [],
 
-      setPlayers: (players: PlayerWithLives[]) => set({ players }),
-      setLives: (lives: number) => set({ lives }),
-      setChillZoneTemp: (players: PlayerWithLives[]) =>
-        set({ chillZoneTemp: players }),
+      setPlayers: (players) => set({ players }),
+      setLives: (lives) => set({ lives }),
+      setChillZoneTemp: (players) => set({ chillZoneTemp: players }),
 
-      generateLobbies: () => {
-        let { players } = get();
+      generateLobbies: (playersList?: PlayerWithLives[]) => {
+        const allPlayers = playersList ?? get().players;
 
-        // Фильтруем только заполненных игроков
-        const filtered = players.filter((p) => p.nickname || p.mmr || p.role);
+        // ✅ Берём только живых игроков для генерации лобби
+        const alivePlayers = allPlayers.filter(
+          (p) => (p.currentLives ?? get().lives) > 0,
+        );
+
+        // убираем "пустые строки"
+        const filtered = alivePlayers.filter(
+          (p) => p.nickname || p.mmr || p.role,
+        );
 
         const shuffle = <T>(arr: T[]): T[] =>
           [...arr].sort(() => Math.random() - 0.5);
@@ -56,6 +62,7 @@ export const useTournamentStore = create<TournamentState>()(
         let lobbyPlayers: PlayerWithLives[] = shuffled;
 
         if (chillCount > 0) {
+          // Выбираем тех, у кого меньше всего chillZone
           const minChill = Math.min(...shuffled.map((p) => p.chillZone));
           const candidates = shuffled.filter((p) => p.chillZone === minChill);
 
@@ -75,6 +82,7 @@ export const useTournamentStore = create<TournamentState>()(
           lobbyPlayers = shuffled.filter((p) => !chillZonePlayers.includes(p));
         }
 
+        // Разбиваем оставшихся по лобби по 10 человек
         const lobbies: PlayerWithLives[][] = [];
         for (let i = 0; i < lobbyPlayers.length; i += 10) {
           lobbies.push(lobbyPlayers.slice(i, i + 10));

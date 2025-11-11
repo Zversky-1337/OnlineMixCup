@@ -2,7 +2,16 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTournamentStore } from "../../store/tournamentStore";
 import type { PlayerWithLives } from "../../store/tournamentStore";
-import styles from "./LobbyPage.module.scss";
+import {
+  Table,
+  Select,
+  Button,
+  Group,
+  Title,
+  Center,
+  Card,
+  Stack,
+} from "@mantine/core";
 
 interface TeamSelections {
   [lobbyKey: string]: {
@@ -26,27 +35,35 @@ const LobbyPage: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const playersWithIds: PlayerWithLives[] = players.map((p) => ({
+    // Обновляем игроков, добавляем defaults
+    const updatedPlayers: PlayerWithLives[] = players.map((p) => ({
       ...p,
       id: p.id || crypto.randomUUID(),
-      currentLives: p.currentLives ?? 2,
+      currentLives: typeof p.currentLives === "number" ? p.currentLives : 2,
+      chillZone: typeof p.chillZone === "number" ? p.chillZone : 0,
+      nickname: p.nickname ?? "",
+      mmr: p.mmr ?? "",
+      role: p.role ?? "",
     }));
 
-    setPlayers(playersWithIds);
+    setPlayers(updatedPlayers);
 
-    const { lobbies, remaining } = generateLobbies();
+    const alivePlayers = updatedPlayers.filter(
+      (p) => (p.currentLives ?? 2) > 0,
+    );
+
+    const { lobbies, remaining } = generateLobbies(alivePlayers);
     setChillZoneTemp(remaining);
     setLobbies(lobbies);
 
+    // Инициализация команд
     const initialSelections: TeamSelections = {};
-
     lobbies.forEach((lobby, idx) => {
       const lobbyKey = `lobby-${idx}`;
       const sortedByMMR = [...lobby].sort(
         (a, b) => Number(b.mmr) - Number(a.mmr),
       );
-
-      const topMMR = sortedByMMR[0].mmr;
+      const topMMR = sortedByMMR[0]?.mmr;
       const topCandidates = sortedByMMR.filter((p) => p.mmr === topMMR);
       const captain1 =
         topCandidates[Math.floor(Math.random() * topCandidates.length)];
@@ -56,7 +73,7 @@ const LobbyPage: React.FC = () => {
         const remainingCandidates = sortedByMMR.filter(
           (p) => p.id !== captain1.id,
         );
-        const secondTopMMR = remainingCandidates[0].mmr;
+        const secondTopMMR = remainingCandidates[0]?.mmr;
         const secondCandidates = remainingCandidates.filter(
           (p) => p.mmr === secondTopMMR,
         );
@@ -74,6 +91,7 @@ const LobbyPage: React.FC = () => {
     });
 
     setTeamSelections(initialSelections);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleNextRound = () => {
@@ -84,24 +102,27 @@ const LobbyPage: React.FC = () => {
 
       Object.values(teamSelections).forEach(({ team1, team2, winner }) => {
         if (!winner) return;
-
         const loserTeam = winner === "team1" ? team2 : team1;
         const loserIds = loserTeam
           .filter(Boolean)
           .filter((id) => !chillIds.has(id));
-
         if (loserIds.includes(player.id)) lostLife = true;
       });
 
       return lostLife
-        ? { ...player, currentLives: Math.max(0, player.currentLives - 1) }
+        ? {
+            ...player,
+            currentLives: Math.max(0, (player.currentLives ?? 2) - 1),
+          }
         : player;
     });
 
-    // Увеличиваем chillZone для игроков в Chill Zone
-    const finalPlayers = updatedPlayers.map((p) =>
-      chillIds.has(p.id) ? { ...p, chillZone: p.chillZone + 1 } : p,
-    );
+    const finalPlayers = updatedPlayers.map((p) => {
+      if ((p.currentLives ?? 0) <= 0) return { ...p, currentLives: 0 };
+      if (chillIds.has(p.id))
+        return { ...p, chillZone: (p.chillZone ?? 0) + 1 };
+      return p;
+    });
 
     setPlayers(finalPlayers);
     setChillZoneTemp([]);
@@ -117,7 +138,10 @@ const LobbyPage: React.FC = () => {
 
   const renderTeamsTable = (lobby: PlayerWithLives[], lobbyKey: string) => {
     const rowsCount = 5;
-    const options = lobby.map((p) => ({ id: p.id, nickname: p.nickname }));
+    const options = lobby.map((p) => ({
+      value: p.id,
+      label: String(p.nickname || ""),
+    }));
 
     const handleSelectChange = (
       team: "team1" | "team2",
@@ -137,91 +161,70 @@ const LobbyPage: React.FC = () => {
     ]);
 
     return (
-      <>
-        <table className={styles.teamsTable}>
-          <thead>
+      <Stack spacing="sm" mt="sm">
+        <Table striped highlightOnHover verticalSpacing="md" fontSize="md">
+          <thead className="text-center">
             <tr>
               <th>Команда 1</th>
               <th>Команда 2</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="text-center">
             {Array.from({ length: rowsCount }).map((_, i) => (
               <tr key={`${lobbyKey}-team-${i}`}>
                 <td>
-                  <select
+                  <Select
+                    data={options.filter(
+                      (p) =>
+                        !selectedIds.has(p.value) ||
+                        p.value === teamSelections[lobbyKey]?.team1[i],
+                    )}
                     value={teamSelections[lobbyKey]?.team1[i] || ""}
-                    onChange={(e) =>
-                      handleSelectChange("team1", i, e.target.value)
+                    onChange={(val) =>
+                      handleSelectChange("team1", i, val || "")
                     }
                     disabled={i === 0}
-                  >
-                    <option value="">Выберите игрока</option>
-                    {options
-                      .filter(
-                        (p) =>
-                          !selectedIds.has(p.id) ||
-                          p.id === teamSelections[lobbyKey]?.team1[i],
-                      )
-                      .map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.nickname}
-                        </option>
-                      ))}
-                  </select>
+                  />
                 </td>
                 <td>
-                  <select
+                  <Select
+                    data={options.filter(
+                      (p) =>
+                        !selectedIds.has(p.value) ||
+                        p.value === teamSelections[lobbyKey]?.team2[i],
+                    )}
                     value={teamSelections[lobbyKey]?.team2[i] || ""}
-                    onChange={(e) =>
-                      handleSelectChange("team2", i, e.target.value)
+                    onChange={(val) =>
+                      handleSelectChange("team2", i, val || "")
                     }
                     disabled={i === 0}
-                  >
-                    <option value="">Выберите игрока</option>
-                    {options
-                      .filter(
-                        (p) =>
-                          !selectedIds.has(p.id) ||
-                          p.id === teamSelections[lobbyKey]?.team2[i],
-                      )
-                      .map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.nickname}
-                        </option>
-                      ))}
-                  </select>
+                  />
                 </td>
               </tr>
             ))}
           </tbody>
-        </table>
+        </Table>
 
-        <div className={styles.winnerSection}>
-          <label>
-            Победила:{" "}
-            <select
-              value={teamSelections[lobbyKey]?.winner || ""}
-              onChange={(e) =>
-                handleWinnerChange(
-                  lobbyKey,
-                  e.target.value as "team1" | "team2",
-                )
-              }
-            >
-              <option value="">Выберите команду</option>
-              <option value="team1">Команда 1</option>
-              <option value="team2">Команда 2</option>
-            </select>
-          </label>
-        </div>
-      </>
+        <Group spacing="sm" align="center">
+          <span>Победила:</span>
+          <Select
+            data={[
+              { value: "team1", label: "Команда 1" },
+              { value: "team2", label: "Команда 2" },
+            ]}
+            value={teamSelections[lobbyKey]?.winner || ""}
+            onChange={(val) =>
+              handleWinnerChange(lobbyKey, val as "team1" | "team2")
+            }
+          />
+        </Group>
+      </Stack>
     );
   };
 
   const renderPlayerTable = (data: PlayerWithLives[], prefix: string) => (
-    <table>
-      <thead>
+    <Table striped highlightOnHover verticalSpacing="md" fontSize="md">
+      <thead className="text-center">
         <tr>
           <th>№</th>
           <th>Никнейм</th>
@@ -231,11 +234,18 @@ const LobbyPage: React.FC = () => {
           <th>Chill Zone</th>
         </tr>
       </thead>
-      <tbody>
+      <tbody className="text-center">
         {data.map((player, i) => {
           const safeId = player.id || `${prefix}-${i}`;
           return (
-            <tr key={`${prefix}-${safeId}`}>
+            <tr
+              key={`${prefix}-${safeId}`}
+              style={{
+                opacity: (player.currentLives ?? 0) <= 0 ? 0.5 : 1,
+                backgroundColor:
+                  (player.currentLives ?? 0) <= 0 ? "#f8d7da" : "transparent",
+              }}
+            >
               <td>{i + 1}</td>
               <td>{player.nickname}</td>
               <td>{player.mmr}</td>
@@ -246,43 +256,49 @@ const LobbyPage: React.FC = () => {
           );
         })}
       </tbody>
-    </table>
+    </Table>
   );
 
   return (
-    <div className={styles.container}>
-      <h1 className={styles.title}>Лобби турнира</h1>
+    <div className="p-6 max-w-6xl mx-auto">
+      <Title order={2} className="mb-6">
+        Лобби турнира
+      </Title>
 
-      {lobbies.map((lobby, idx) => {
-        const lobbyKey = `lobby-${idx}`;
-        return (
-          <div key={lobbyKey} className={styles.lobbyTableWrapper}>
-            <div className={styles.flexRow}>
-              <div className={styles.lobbySection}>
-                <h2>Лобби {idx + 1}</h2>
-                {renderPlayerTable(lobby, lobbyKey)}
-              </div>
-              <div className={styles.teamsSection}>
-                <h2>Формирование команд</h2>
-                {renderTeamsTable(lobby, lobbyKey)}
-              </div>
-            </div>
-          </div>
-        );
-      })}
+      <Stack spacing="lg">
+        {lobbies.map((lobby, idx) => {
+          const lobbyKey = `lobby-${idx}`;
+          return (
+            <Card key={lobbyKey} shadow="sm" padding="md" radius="md">
+              <Group align="flex-start" spacing="xl">
+                <div className="flex-1">
+                  <Title order={4}>Лобби {idx + 1}</Title>
+                  {renderPlayerTable(lobby, lobbyKey)}
+                </div>
+                <div className="flex-1">
+                  <Title order={4}>Формирование команд</Title>
+                  {renderTeamsTable(lobby, lobbyKey)}
+                </div>
+              </Group>
+            </Card>
+          );
+        })}
 
-      {chillZoneTemp.length > 0 && (
-        <div className={styles.chillZoneSection}>
-          <h2>Chill Zone</h2>
-          {renderPlayerTable(chillZoneTemp, "chill")}
-        </div>
-      )}
+        {chillZoneTemp.length > 0 && (
+          <Card shadow="sm" padding="md" radius="md">
+            <Title order={4} className="mb-2">
+              Chill Zone
+            </Title>
+            {renderPlayerTable(chillZoneTemp, "chill")}
+          </Card>
+        )}
+      </Stack>
 
-      <div className={styles.buttonWrapper}>
-        <button onClick={handleNextRound} className={styles.nextBtn}>
+      <Center mt="xl">
+        <Button color="green" size="md" onClick={handleNextRound}>
           Завершить раунд
-        </button>
-      </div>
+        </Button>
+      </Center>
     </div>
   );
 };

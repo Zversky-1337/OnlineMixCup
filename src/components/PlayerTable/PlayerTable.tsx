@@ -1,161 +1,146 @@
-import React, { useEffect } from "react";
-import styles from "./PlayerTable.module.scss";
-import { useDebounce } from "../../hooks/useDebounce";
+import React, { useEffect, useRef } from "react";
+import { TextInput, Button, Table, Center } from "@mantine/core";
 import { useTournamentStore } from "../../store/tournamentStore";
 
 const PlayerTable: React.FC = () => {
-  const players = useTournamentStore((s) => s.players) || [];
+  const players = useTournamentStore((s) => s.players);
   const setPlayers = useTournamentStore((s) => s.setPlayers);
-  const lives = useTournamentStore((s) => s.lives) || 2;
+  const lives = useTournamentStore((s) => s.lives);
+  const getPlayers = useTournamentStore.getState; // <-- доступ к актуальному состоянию
 
-  // Инициализация первой строки
-  useEffect(() => {
-    if (!players.length) {
-      setPlayers([
-        {
-          id: crypto.randomUUID(),
-          nickname: "",
-          mmr: "",
-          role: "",
-          ready: false,
-          chillZone: 0,
-          currentLives: lives, // сразу lives
-        },
-      ]);
-    }
-  }, [setPlayers, players.length, lives]);
+  const typingTimeout = useRef<NodeJS.Timeout | null>(null);
 
-  // Дебаунс последнего ника
-  const lastNickname = players[players.length - 1]?.nickname || "";
-  const debouncedLastNickname = useDebounce(lastNickname, 500);
-
-  // Добавление новой строки после ввода ника
-  useEffect(() => {
-    const last = players[players.length - 1];
-    if (last && last.nickname.trim() !== "") {
-      setPlayers([
-        ...players,
-        {
-          id: crypto.randomUUID(),
-          nickname: "",
-          mmr: "",
-          role: "",
-          ready: false,
-          chillZone: 0,
-          currentLives: lives,
-        },
-      ]);
-    }
-  }, [debouncedLastNickname, setPlayers, players, lives]);
-
-  // Вычитаем жизнь у игроков с крестиком при создании таблицы
-  useEffect(() => {
-    if (!players.length) return;
-
-    setPlayers(
-      players.map((p) => {
-        const isEmpty = !p.nickname && !p.mmr && !p.role;
-        if (isEmpty) return p; // пустые строки не трогаем
-
-        return {
-          ...p,
-          currentLives: p.ready ? lives : Math.max(0, lives - 1),
-        };
-      }),
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lives]);
+  // Добавление нового игрока
+  const handleAddPlayer = () => {
+    const current = getPlayers().players;
+    const newPlayer = {
+      id: crypto.randomUUID(),
+      nickname: "",
+      mmr: "3000",
+      role: "1-2-3-4-5",
+      ready: false,
+      chillZone: 0,
+      currentLives: lives,
+    };
+    setPlayers([...current, newPlayer]);
+  };
 
   const handleTextChange = (
     id: string,
     field: "nickname" | "mmr" | "role",
     value: string,
   ) => {
-    setPlayers(
-      players.map((p) => (p.id === id ? { ...p, [field]: value } : p)),
+    const current = getPlayers().players;
+    const updatedPlayers = current.map((p) =>
+      p.id === id ? { ...p, [field]: value } : p,
     );
+    setPlayers(updatedPlayers);
+
+    // авто-добавление новой строки
+    if (field === "nickname") {
+      const lastPlayer = updatedPlayers[updatedPlayers.length - 1];
+      if (id === lastPlayer.id) {
+        if (typingTimeout.current) clearTimeout(typingTimeout.current);
+        typingTimeout.current = setTimeout(() => {
+          const check = getPlayers().players.at(-1);
+          if (check && check.nickname.trim() !== "") {
+            handleAddPlayer();
+          }
+        }, 500);
+      }
+    }
   };
 
   const handleReadyToggle = (id: string) => {
-    setPlayers(
-      players.map((p) => {
-        if (p.id === id) {
-          const newReady = !p.ready;
-          return {
+    const current = getPlayers().players;
+    const updated = current.map((p) =>
+      p.id === id
+        ? {
             ...p,
-            ready: newReady,
-            currentLives: newReady
-              ? p.currentLives // если ставим галочку — жизнь не трогаем
-              : Math.max(0, p.currentLives - 1), // крестик — минус 1
-          };
-        }
-        return p;
-      }),
+            ready: !p.ready,
+            currentLives: !p.ready
+              ? p.currentLives
+              : Math.max(0, p.currentLives - 1),
+          }
+        : p,
     );
+    setPlayers(updated);
   };
 
+  useEffect(() => {
+    if (players.length === 0) {
+      handleAddPlayer();
+    }
+  }, []);
+
   return (
-    <div className={styles.tableContainer}>
-      <table>
-        <thead>
-          <tr>
-            <th>№</th>
-            <th>Никнейм</th>
-            <th>MMR</th>
-            <th>Роль</th>
-            <th>Готов</th>
-          </tr>
-        </thead>
-        <tbody>
-          {players.map((row, index) => (
-            <tr key={row.id}>
-              <td>{index + 1}</td>
-              <td>
-                <input
-                  type="text"
-                  value={row.nickname}
-                  onChange={(e) =>
-                    handleTextChange(row.id, "nickname", e.target.value)
-                  }
-                />
-              </td>
-              <td>
-                <input
-                  type="text"
-                  value={row.mmr}
-                  onChange={(e) =>
-                    handleTextChange(row.id, "mmr", e.target.value)
-                  }
-                />
-              </td>
-              <td>
-                <input
-                  type="text"
-                  value={row.role}
-                  onChange={(e) =>
-                    handleTextChange(row.id, "role", e.target.value)
-                  }
-                />
-              </td>
-              <td>
-                <button
-                  className={row.ready ? styles.active : ""}
-                  onClick={() => handleReadyToggle(row.id)}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    color: row.ready ? "#4caf50" : "#f44336",
-                    fontSize: "16px",
-                  }}
-                >
-                  {row.ready ? "✔️" : "❌"}
-                </button>
-              </td>
+    <div className="p-6">
+      <Center>
+        <Table
+          striped
+          highlightOnHover
+          verticalSpacing="md"
+          className="text-center"
+        >
+          <thead className="text-lg">
+            <tr>
+              <th>№</th>
+              <th>Никнейм</th>
+              <th>MMR</th>
+              <th>Роль</th>
+              <th>Готов</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {Array.isArray(players) &&
+              players.map((row, index) => (
+                <tr key={row.id}>
+                  <td>{index + 1}</td>
+                  <td>
+                    <TextInput
+                      size="md"
+                      value={row.nickname}
+                      onChange={(e) =>
+                        handleTextChange(row.id, "nickname", e.target.value)
+                      }
+                      styles={{ input: { textAlign: "center", fontSize: 16 } }}
+                    />
+                  </td>
+                  <td>
+                    <TextInput
+                      size="md"
+                      value={row.mmr}
+                      onChange={(e) =>
+                        handleTextChange(row.id, "mmr", e.target.value)
+                      }
+                      styles={{ input: { textAlign: "center", fontSize: 16 } }}
+                    />
+                  </td>
+                  <td>
+                    <TextInput
+                      size="md"
+                      value={row.role}
+                      onChange={(e) =>
+                        handleTextChange(row.id, "role", e.target.value)
+                      }
+                      styles={{ input: { textAlign: "center", fontSize: 16 } }}
+                    />
+                  </td>
+                  <td>
+                    <Button
+                      variant={row.ready ? "filled" : "outline"}
+                      color={row.ready ? "green" : "red"}
+                      size="md"
+                      onClick={() => handleReadyToggle(row.id)}
+                    >
+                      {row.ready ? "✔️" : "❌"}
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+          </tbody>
+        </Table>
+      </Center>
     </div>
   );
 };
