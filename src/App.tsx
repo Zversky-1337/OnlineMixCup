@@ -1,15 +1,13 @@
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import CreateTournament from "./pages/CreateTournament/CreateTournament";
-import TournamentPage from "./pages/TournamentPage/TournamentPage";
-import LobbyPage from "./pages/LobbyPage/LobbyPage"; // новый импорт
+import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
+import TournamentPage from "./pages/TournamentPage.tsx";
+import { Lobby } from "./features/Lobby";
 
 function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<CreateTournament />} />
-        <Route path="/tournament" element={<TournamentPage />} />
-        <Route path="/lobbies" element={<LobbyPage />} />
+        <Route path="/" element={<TournamentPage />} />
+        <Route path="/lobbies" element={<Lobby />} />
       </Routes>
     </Router>
   );

@@ -4,6 +4,7 @@ import { MantineProvider } from "@mantine/core";
 import App from "./App";
 import "./index.css";
 import "@mantine/core/styles.css";
+import "mantine-react-table/styles.css"; //import MRT styles
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
