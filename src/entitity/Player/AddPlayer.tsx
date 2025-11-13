@@ -4,6 +4,9 @@ import { Button } from "@mantine/core";
 import { usePlayerStore } from "./player.store";
 import type { Player } from "./types.ts";
 
+const generateId = () =>
+  `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+
 type AddPlayerProps = {
   className?: string;
 };
@@ -14,7 +17,7 @@ export const AddPlayer: FC<AddPlayerProps> = ({ className }) => {
 
   const handleAddPlayer = () => {
     const newPlayer: Player = {
-      id: crypto.randomUUID(),
+      id: generateId(),
       nickname: `Nickname ${players.length + 1}`,
       mmr: Math.floor(Math.random() * (14000 - 1000 + 1)) + 1000,
       role: "1-2-3-4-5",
